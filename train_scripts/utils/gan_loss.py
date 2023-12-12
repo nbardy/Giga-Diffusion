@@ -98,10 +98,21 @@ class FullLoss(nn.Module):
         #     name="coca_ViT-L-14", pretrained="mscoco_finetuned_laion2B-s13B-b90k"
         # )
         apple_clip_pretrained = "hf-hub:apple/DFN5B-CLIP-ViT-H-14-384"
-        name = "ViT-H/14-384"
-        clip_adapter = OpenClipAdapter(pretrained=apple_clip_pretrained)
+        clip_adapter = OpenClipAdapter(
+            pretrained=apple_clip_pretrained,
+            tokenizer_name="ViT-H-14",
+        )
         self.clip_discriminator = VisionAidedDiscriminator(clip=clip_adapter)
         self.clip_model = clip_adapter
+
+        model, _, transform = open_clip.create_model_and_transforms(
+            model_name="coca_ViT-L-14", pretrained="mscoco_finetuned_laion2B-s13B-b90k"
+        )
+
+        self.coca_clip_model = OpenClipAdapter(
+            tokenizer_name="coca_ViT-L-14",
+            model=model,
+        )
 
         # clip_model, preprocess = create_model_from_pretrained()
         # tokenizer = get_tokenizer('ViT-H-14')
@@ -173,6 +184,17 @@ class FullLoss(nn.Module):
             else 0
         )
 
+        # Sigmoid loss on coca
+        coca_contrastive_loss = (
+            aux_clip_loss(
+                clip=self.coca_clip_model.clip,
+                texts=prompts,
+                images=fake_images,
+            )
+            if args.coca_contrastive_loss_scale != 0
+            else 0
+        )
+
         loss_dict = {
             "vit_discriminator_loss": vit_disc_loss,
             "multi_scale_vit_discriminator_loss": scaled_vit_disc_loss,
@@ -185,6 +207,7 @@ class FullLoss(nn.Module):
             "teacher_l1_loss": teacher_l1_loss,
             "teacher_lpips_loss": teacher_lpips_loss,
             "clip_contrastive_loss": clip_contrastive_loss,
+            "coca_contrastive_loss": coca_contrastive_loss,
         }
 
         return (
@@ -198,6 +221,7 @@ class FullLoss(nn.Module):
             + args.teacher_mse_loss_scale * teacher_mse_loss
             + args.teacher_l1_loss_scale * teacher_l1_loss
             + args.teacher_lpips_loss_scale * teacher_lpips_loss
-            + args.contrastive_loss_scale * clip_contrastive_loss,
+            + args.contrastive_loss_scale * clip_contrastive_loss
+            + args.coca_contrastive_loss_scale * coca_contrastive_loss,
             loss_dict,
         )

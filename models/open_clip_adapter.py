@@ -48,27 +48,37 @@ def l2norm(t):
 
 apple_model_large = "apple/DFN5B-CLIP-ViT-H-14-378"
 open_clip_apple_pretrained = "hf-hub:" + apple_model_large
-tokenizer_name = "ViT-L-14"
+apple_model_name = "ViT-H-14-quickgelu"
 
 big_timm_siglip = "timm/ViT-B-16-SigLIP-512"
 hub_siglip = "hf-hub:" + big_timm_siglip
+
+coca_model_name = "coca_ViT-L-14"
+coca_pretrained = "mscoco_finetuned_laion2B-s13B-b90k"
 
 
 class OpenClipAdapter(nn.Module):
     @beartype
     def __init__(
         self,
-        name="ViT-B/32",
-        pretrained="laion400m_e32",
-        tokenizer_name="ViT-B-32-quickgelu",
+        tokenizer_name=None,
+        pretrained=None,
+        model=None,
         eos_id=49407,
     ):
         super().__init__()
 
+        assert exists(tokenizer_name), "name must be specified"
+        # assert exists(pretrained), "pretrained must be specified"
+        # Assert pretrained or model is preloaded
+
         tokenizer = open_clip.get_tokenizer(tokenizer_name)
 
-        clip_model, preprocess = create_model_from_pretrained(pretrained)
-        tokenizer = get_tokenizer(tokenizer_name)
+        if model is None:
+            clip_model, preprocess = create_model_from_pretrained(pretrained)
+        else:
+            clip_model = model
+            preprocess = open_clip.load_preprocess(tokenizer_name)
 
         self.clip = clip_model
         self.tokenizer = tokenizer
@@ -76,22 +86,20 @@ class OpenClipAdapter(nn.Module):
 
         # hook for getting final text representation
 
-        text_attention_final = self.find_layer("ln_final")
+        text_attention_final = self.clip.ln_final
         self._dim_latent = text_attention_final.weight.shape[0]
         self.text_handle = text_attention_final.register_forward_hook(self._text_hook)
 
         # hook for getting final image representation
         # this is for vision-aided gan loss
 
-        self._dim_image_latent = self.find_layer("visual.ln_post").weight.shape[0]
+        self._dim_image_latent = self.clip.visual.ln_post.weight.shape[0]
 
         num_visual_layers = len(clip_model.visual.transformer.resblocks)
         self.image_handles = []
 
         for visual_layer in range(num_visual_layers):
-            image_attention_final = self.find_layer(
-                f"visual.transformer.resblocks.{visual_layer}"
-            )
+            image_attention_final = self.clip.visual.transformer.resblocks[visual_layer]
 
             handle = image_attention_final.register_forward_hook(self._image_hook)
             self.image_handles.append(handle)
@@ -105,22 +113,21 @@ class OpenClipAdapter(nn.Module):
     def device(self):
         return next(self.parameters()).device
 
-    def find_layer(self, layer):
-        print("find layer", layer)
-        print(self.clip)
-        # debugger()
-        # import pdb
+    # def find_layer(self, layer):
+    #     print("find layer", layer)
+    #     print(self.clip)
+    #     import ipdb
 
-        # pdb.set_trace()
+    #     ipdb.set_trace()
 
-        modules = dict(
-            {
-                "text": [*self.clip.transformer.named_modules()],
-                "visual": [*self.clip.visual.named_modules()],
-            }
-        )
-        print(modules)
-        return modules.get(layer, None)
+    #     modules = dict(
+    #         {
+    #             "text": [*self.clip.transformer.named_modules()],
+    #             "visual": [*self.clip.visual.named_modules()],
+    #         }
+    #     )
+    #     print(modules)
+    #     return modules.get(layer, None)
 
     def clear(self):
         if self.cleared:
@@ -475,3 +482,12 @@ class VisionAidedDiscriminator(nn.Module):
             return logits
 
         return logits, image_encodings
+
+
+# Test with main
+#
+# Cretae apple adapter and open debugger on main
+if __name__ == "__main__":
+    print("Creating model")
+    adapter = OpenClipAdapter(pretrained=open_clip_apple_pretrained)
+    print("Created model")
