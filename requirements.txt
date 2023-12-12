@@ -1,0 +1,5 @@
+prodigyopt @ git+https://github.com/konstmish/prodigy.git
+lpips @ git+https://github.com/richzhang/PerceptualSimilarity.git
+beartype
+open_clip_torch
+ema-pytorch
