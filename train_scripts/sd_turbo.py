@@ -208,8 +208,14 @@ def train(args, accelerator):
                 log_validation_samples(model, args, step)
 
 
+default_base_model_name = "runwayml/stable-diffusion-v1-5"
+
 def get_args():
     parser = argparse.ArgumentParser(description="Training script for SD Turbo")
+    parser = argparse.ArgumentParser(
+        "--base_model_name", type=str, default=default_base_model_name, help="Base model name"
+    )
+
     parser.add_argument(
         "--batch_size", type=int, default=32, help="Batch size for training"
     )
