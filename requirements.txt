@@ -3,4 +3,4 @@ lpips @ git+https://github.com/richzhang/PerceptualSimilarity.git
 beartype
 open_clip_torch
 ema-pytorch
-diffusers @ git+https://github/huggingface/diffusers.git
+diffusers @ git+https://github.com/huggingface/diffusers.git
